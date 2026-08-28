@@ -318,12 +318,13 @@
         // Jika menggunakan canvas/immersive default, ini akan terisi otomatis.
         // =====================================================================
         const firebaseConfig = {
-            apiKey: "MASUKKAN_APIKEY_ANDA_DISINI",
-            authDomain: "simedu-anda.firebaseapp.com",
-            projectId: "simedu-anda",
-            storageBucket: "simedu-anda.appspot.com",
-            messagingSenderId: "1234567890",
-            appId: "1:1234567890:web:abcdefghijkl"
+            apiKey: "AIzaSyAR_4MwCnCc8-NUnmFy7wmwrTHgTnlAJRU",
+  authDomain: "simedu-2756d.firebaseapp.com",
+  projectId: "simedu-2756d",
+  storageBucket: "simedu-2756d.firebasestorage.app",
+  messagingSenderId: "482568707251",
+  appId: "1:482568707251:web:ae4807b91c96a3c8c524c6",
+  measurementId: "G-MGH3QHKM8M"
         };
         // =====================================================================
 
@@ -910,9 +911,17 @@
         window.bukaModalJadwal = () => { document.getElementById('modalUbahJadwal').classList.add('active'); renderTabEditJadwal(); renderFormJadwal(); };
         window.closeModalJadwal = () => document.getElementById('modalUbahJadwal').classList.remove('active');
         
+        // Fungsi baru untuk memastikan ketikan sebelumnya disimpan sebelum pindah hari
+        window.gantiHariEdit = (hari) => {
+            saveDraftJadwal(); 
+            editHariAktif = hari;
+            renderTabEditJadwal();
+            renderFormJadwal();
+        };
+        
         const renderTabEditJadwal = () => { 
             // PERBAIKAN: Layout Grid untuk navigasi hari agar tidak terpotong di HP
-            document.getElementById('tabHariEdit').innerHTML = ["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"].map(h => `<button onclick="editHariAktif='${h}'; renderTabEditJadwal(); renderFormJadwal();" class="px-2 py-2.5 rounded-lg text-sm font-bold transition shadow-sm border ${h===editHariAktif ? 'bg-secondary text-white border-transparent' : 'bg-white text-gray-600 hover:bg-gray-100 border-gray-200'}">${h}</button>`).join(''); 
+            document.getElementById('tabHariEdit').innerHTML = ["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"].map(h => `<button onclick="gantiHariEdit('${h}')" class="px-2 py-2.5 rounded-lg text-sm font-bold transition shadow-sm border ${h===editHariAktif ? 'bg-secondary text-white border-transparent' : 'bg-white text-gray-600 hover:bg-gray-100 border-gray-200'}">${h}</button>`).join(''); 
             document.getElementById('titleEditHari').innerText = `Jadwal Hari ${editHariAktif}`;
         };
         const renderFormJadwal = () => { 
