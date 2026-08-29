@@ -1003,7 +1003,40 @@
         window.bukaFolder = (f) => { folderAktif = f; document.getElementById('folderView').classList.add('hidden'); document.getElementById('fileView').classList.remove('hidden'); document.getElementById('namaFolderAktif').innerText = f; renderFiles(); };
         window.closeModalFolder = () => { document.getElementById('modalTambahFolder').classList.remove('active'); document.getElementById('inputNamaFolder').value = ''; };
         window.prosesTambahFolder = () => { const nm = document.getElementById('inputNamaFolder').value.trim(); if(!nm) return showToast("Nama tak boleh kosong"); if(state.adminFolders[nm]) return showToast("Folder sudah ada!"); state.adminFolders[nm] = []; window.saveToCloud(); closeModalFolder(); renderAdmin(); showToast("Folder Dibuat!"); };
-        window.prosesUpload = (e) => { const file = e.target.files[0]; if(!file) return; let tipe = 'file'; if(file.name.endsWith('.pdf')) tipe='pdf'; else if(file.name.includes('.xls')||file.name.includes('.csv')) tipe='excel'; else if(file.name.includes('.doc')) tipe='word'; const sz = (file.size/1024).toFixed(0)+' KB'; state.adminFolders[folderAktif].push({ nama: file.name, tipe, sz, tgl: window.getToday() }); window.saveToCloud(); renderFiles(); renderAdmin(); e.target.value = ''; showToast("File Terupload"); };
+        
+        // --- PERBAIKAN: MEMBACA DAN MENYIMPAN FILE ASLI ---
+        window.prosesUpload = (e) => { 
+            const file = e.target.files[0]; 
+            if(!file) return; 
+            
+            // Batasan ukuran 700KB karena limit dokumen Firestore 1MB
+            if (file.size > 700 * 1024) {
+                showToast("Peringatan: Ukuran maksimal file adalah 700KB untuk database ini.");
+                e.target.value = '';
+                return;
+            }
+
+            let tipe = 'file'; 
+            if(file.name.toLowerCase().endsWith('.pdf')) tipe='pdf'; 
+            else if(file.name.toLowerCase().match(/\.(xls|xlsx|csv)$/)) tipe='excel'; 
+            else if(file.name.toLowerCase().match(/\.(doc|docx)$/)) tipe='word'; 
+            const sz = (file.size/1024).toFixed(0)+' KB'; 
+            
+            // Membaca file sungguhan menggunakan FileReader
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const dataUrl = event.target.result; // Berisi Base64 Data Asli File
+                state.adminFolders[folderAktif].push({ 
+                    nama: file.name, tipe, sz, tgl: window.getToday(), data: dataUrl 
+                }); 
+                window.saveToCloud(); 
+                renderFiles(); 
+                renderAdmin(); 
+                e.target.value = ''; 
+                showToast("File Berhasil Diupload & Disimpan!"); 
+            };
+            reader.readAsDataURL(file);
+        };
         
         // Helper untuk memproduksi Blob File dengan Format Valid (agar bisa dibuka)
         const getSimBlob = (f) => {
@@ -1034,9 +1067,27 @@
             return new Blob([content], {type: mime});
         };
 
+        // Helper: Convert Base64 (Data URI) kembali menjadi Blob agar aman didownload/dibuka
+        const dataURItoBlob = (dataURI) => {
+            const byteString = atob(dataURI.split(',')[1]);
+            const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
+            const ab = new ArrayBuffer(byteString.length);
+            const ia = new Uint8Array(ab);
+            for (let i = 0; i < byteString.length; i++) {
+                ia[i] = byteString.charCodeAt(i);
+            }
+            return new Blob([ab], {type: mimeString});
+        };
+
+        // Penentu Data File: File Asli (baru upload) atau File Simulasi (data lama)
+        const getFileBlob = (f) => {
+            if (f.data) return dataURItoBlob(f.data); // File asli
+            return getSimBlob(f); // Fallback ke simulasi jika itu file dummy lama
+        };
+
         window.downloadFileSim = (idx) => { 
             const f = state.adminFolders[folderAktif][idx]; 
-            const blob = getSimBlob(f); 
+            const blob = getFileBlob(f); 
             const a = document.createElement('a'); 
             a.href = URL.createObjectURL(blob); 
             a.download = f.nama; 
@@ -1046,7 +1097,7 @@
         
         window.bukaFileSim = (idx) => {
             const f = state.adminFolders[folderAktif][idx];
-            const blob = getSimBlob(f);
+            const blob = getFileBlob(f);
             const url = URL.createObjectURL(blob);
             window.open(url, '_blank');
         };
