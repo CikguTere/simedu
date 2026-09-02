@@ -308,7 +308,6 @@
     <!-- ========================================================================= -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         // =====================================================================
@@ -325,40 +324,27 @@
         };
         // =====================================================================
 
-        // Inisialisasi Database
         let db = null;
-        let auth = null;
-        let currentUser = null;
-        let isImmersive = false;
         
-        // Pengecekan Lingkungan Cerdas (Bypass khusus platform Immersive)
-        let configToUse = firebaseConfig;
-        if (typeof window.__firebase_config !== 'undefined') {
-            configToUse = typeof window.__firebase_config === 'string' ? JSON.parse(window.__firebase_config) : window.__firebase_config;
-            if(configToUse) {
-                firebaseConfig.apiKey = "BYPASS_IMMERSIVE"; // Mark as bypassed
-                isImmersive = true;
-            }
-        }
-
         try {
-            const app = initializeApp(configToUse);
+            // PAKSA MENGGUNAKAN KONFIGURASI FIREBASE PRIBADI ANDA SECARA MUTLAK
+            // Mengabaikan bypass dari lingkungan editor untuk memanggil data orisinil
+            const app = initializeApp(firebaseConfig);
             db = getFirestore(app);
-            auth = getAuth(app);
-            console.log("Sistem Cloud (Firebase) Aktif dan Terhubung!");
+            console.log("Sistem Cloud (Firebase) Pribadi Aktif dan Terhubung!");
         } catch (e) { 
             console.warn("Peringatan: Gagal terhubung ke Cloud Database", e); 
         }
 
-        const APP_ID = typeof window.__app_id !== 'undefined' ? window.__app_id : "simedu_default"; 
-        const OLD_USER_ID = "guru_kelas_5b";
+        // Memaksa path ke dokumen orisinil Anda saat aplikasi berjalan di website asli Anda
+        const USER_ID = "guru_kelas_5b"; 
 
         // =====================================================================
-        // 2. STATE DATA BAWAAN (DUMMY DATA MEMORY)
+        // 2. STATE DATA BAWAAN (KOSONG, TANPA DUMMY)
         // =====================================================================
         let currentTab = 'dashboard';
         let state = {
-            students: [],
+            students: [], // DUMMY DIHAPUS TOTAL - Menunggu tarikan data dari Firebase
             announcements: [], absensi: {}, agendas: [], grades: [], disciplines: [], coachings: [],
             jadwal: {
                 "Senin": [{waktu:"07.30 - 08.05", mapel:"Upacara Bendera"}, {waktu:"08.05 - 09.50", mapel:"Pend. Pancasila"}, {waktu:"09.50 - 10.20", mapel:"ISTIRAHAT"}, {waktu:"10.20 - 12.05", mapel:"Matematika"}],
@@ -374,19 +360,13 @@
             }
         };
 
-        // Fungsi mendapatkan referensi dokumen yang tepat (Adaptif)
+        // Fungsi mendapatkan referensi dokumen orisinil
         const getDocRef = () => {
-            if (isImmersive && currentUser) {
-                // MENGEMBALIKAN PATH KE DATA PRIVAT (Tempat data tanggal 30 Agustus Anda tersimpan dengan aman)
-                // Data akan tetap tersinkron secara real-time di perangkat yang login menggunakan akun Anda
-                return doc(db, 'artifacts', APP_ID, 'users', currentUser.uid, 'appData', 'state');
-            } else {
-                // Gunakan path lama jika memakai Firebase pribadi
-                return doc(db, "simedu_global", "shared_state");
-            }
+            return doc(db, "artifacts_users", USER_ID);
         };
 
         let isFirstLoad = true;
+        let isDataLoaded = false; // KUNCI KEAMANAN DATA: Mencegah penimpaan data kosong
 
         // Fungsi memuat data dari Cloud
         const loadDataFromCloud = () => {
@@ -408,6 +388,7 @@
                             const activePos = activeEl && (activeEl.type === 'text') ? activeEl.selectionStart : null;
 
                             state = parsed;
+                            isDataLoaded = true; // Gembok dibuka, data berhasil dimuat dengan aman
                             renderAll();
                             
                             // 2. Kembalikan fokus kursor ke input semula
@@ -420,27 +401,29 @@
                             }
 
                             if(isFirstLoad) { 
-                                showToast("✅ Sinkronisasi Real-Time Aktif!"); 
+                                showToast("✅ Data Asli Berhasil Dipanggil & Terkunci!"); 
                                 isFirstLoad = false; 
                             }
                         }
                     } catch(err) { console.warn("Parsing cloud data failed", err); }
                 } else {
-                    // Jika data belum ada di Cloud, buat dokumen awal dari state kosong
+                    // Jika data belum ada di Cloud sama sekali (pengguna pertama kali)
+                    isDataLoaded = true; // Izinkan penyimpanan pertama
                     window.saveToCloud();
                 }
             }, (error) => {
                 console.error("Kesalahan sinkronisasi data Cloud:", error.message);
                 if (error.code === 'permission-denied') {
                     showToast("Akses Cloud ditolak. Memakai data lokal.");
+                    isDataLoaded = true; // Izinkan mode lokal bekerja
                 }
             });
         };
 
         // Auto-Save ke Firebase Realtime
         window.saveToCloud = async () => {
-            if(!db) return;
-            if(isImmersive && !currentUser) return; // Tunggu auth selesai
+            // CEGAH PENYIMPANAN JIKA DATA ASLI DARI SERVER BELUM SELESAI DIMUAT (Menghindari penimpaan data kosong)
+            if(!db || !isDataLoaded) return;
 
             try { 
                 const docRef = getDocRef();
@@ -451,34 +434,10 @@
             }
         };
 
-        // Alur Otentikasi & Inisialisasi Cloud
+        // Mulai Tarik Data
         if (db) {
-            if (isImmersive) {
-                // Alur Immersive (Wajib Auth Anonymous / Token)
-                const initAuth = async () => {
-                    try {
-                        if (typeof window.__initial_auth_token !== 'undefined' && window.__initial_auth_token) {
-                            await signInWithCustomToken(auth, window.__initial_auth_token);
-                        } else {
-                            await signInAnonymously(auth);
-                        }
-                    } catch (e) {
-                        console.error("Gagal Otentikasi Cloud:", e);
-                    }
-                };
-                
-                onAuthStateChanged(auth, (user) => {
-                    currentUser = user;
-                    if (user) loadDataFromCloud();
-                });
-                
-                initAuth();
-            } else {
-                // Alur Firebase Pribadi (Langsung baca data)
-                loadDataFromCloud();
-            }
+            loadDataFromCloud();
         }
-
 
         // =====================================================================
         // 3. UI HELPER & HTML BUILDER DINAMIS (Agar Index Cepat Load)
@@ -737,6 +696,7 @@
             updateChartAbsen(tgl.substring(0,7)); 
             window.saveToCloud();
         };
+        window.renderAbsensi = renderAbsensi;
 
         let myChart = null;
         const updateChartAbsen = (bulanStr) => {
@@ -840,7 +800,7 @@
                 let total = 0; let count = 0;
                 
                 tugasList.forEach(t => {
-                    const find = gradesFilter.find(g => g.sId===s.id && g.tugas===t);
+                    const find = gradesFilter.find(g => g.sId===s.id && g.mapel===mapel && g.tipe===tipe && g.tugas===t);
                     const val = find ? find.score : '';
                     if(val !== '') { total += parseInt(val); count++; }
                     
@@ -856,6 +816,7 @@
                 return row;
             }).join('');
         };
+        window.renderNilai = renderNilai;
         
         window.hapusKolomTugas = (tugasName) => {
             const mapel = document.getElementById('nMapel').value;
