@@ -377,9 +377,9 @@
         // Fungsi mendapatkan referensi dokumen yang tepat (Adaptif)
         const getDocRef = () => {
             if (isImmersive && currentUser) {
-                // MENGGUNAKAN PATH 'PUBLIC' AGAR TERSINKRONISASI DI SEMUA PERANGKAT SECARA REALTIME
-                // Data ini akan sama persis jika dibuka dari HP, Laptop, atau Incognito browser
-                return doc(db, 'artifacts', APP_ID, 'public', 'data', 'simedu_state', 'shared');
+                // MENGEMBALIKAN PATH KE DATA PRIVAT (Tempat data tanggal 30 Agustus Anda tersimpan dengan aman)
+                // Data akan tetap tersinkron secara real-time di perangkat yang login menggunakan akun Anda
+                return doc(db, 'artifacts', APP_ID, 'users', currentUser.uid, 'appData', 'state');
             } else {
                 // Gunakan path lama jika memakai Firebase pribadi
                 return doc(db, "simedu_global", "shared_state");
